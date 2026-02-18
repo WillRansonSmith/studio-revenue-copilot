@@ -2,6 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { getSessions } from "@/lib/data";
 import { buildCorpus, retrieve } from "@/lib/retrieval";
+import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
+
+/* ── Demo-mode configuration ────────────────────────────────────── */
+const DEMO_MODE = process.env.DEMO_MODE === "1";
+const DEMO_MAX_REQ_PER_MINUTE = Number(process.env.DEMO_MAX_REQ_PER_MINUTE) || 6;
+const DEMO_MAX_REQ_PER_HOUR = Number(process.env.DEMO_MAX_REQ_PER_HOUR) || 30;
+const DEMO_MAX_TOKENS = Number(process.env.DEMO_MAX_TOKENS) || 500;
 
 export interface CopilotStructuredResponse {
   summary: string;
@@ -59,6 +66,21 @@ function mockResponse(query: string, contextDocs: string[]): CopilotStructuredRe
 
 export async function POST(req: NextRequest) {
   try {
+    /* ── Demo-mode rate limiting ─────────────────────────────── */
+    if (DEMO_MODE) {
+      const ip = getClientIp(req);
+      const result = checkRateLimit(ip, DEMO_MAX_REQ_PER_MINUTE, DEMO_MAX_REQ_PER_HOUR);
+      if (!result.allowed) {
+        return NextResponse.json(
+          {
+            error: "Rate limit exceeded",
+            message: "Demo is rate-limited. Try again in a moment.",
+          },
+          { status: 429 },
+        );
+      }
+    }
+
     const body = await req.json();
     const message = typeof body?.message === "string" ? body.message.trim() : "";
     if (!message) {
@@ -76,10 +98,11 @@ export async function POST(req: NextRequest) {
     const hasKey = Boolean(process.env.ANTHROPIC_API_KEY);
 
     if (hasKey) {
+      const maxTokens = DEMO_MODE ? DEMO_MAX_TOKENS : 1024;
       const anthropic = new Anthropic();
       const response = await anthropic.messages.create({
         model: "claude-sonnet-4-20250514",
-        max_tokens: 1024,
+        max_tokens: maxTokens,
         system: STRUCTURE_PROMPT + "\n\n" + contextBlock,
         messages: [{ role: "user", content: message }],
       });
