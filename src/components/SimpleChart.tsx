@@ -22,15 +22,17 @@ export function SimpleChart({
   const gap = 4;
 
   return (
-    <div className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-700 dark:bg-zinc-900">
-      <p className="mb-3 text-sm font-medium text-zinc-700 dark:text-zinc-300">{title}</p>
+    <div className="rounded-xl border border-zinc-200/80 bg-white p-5 shadow-sm dark:border-zinc-700/80 dark:bg-zinc-900">
+      <p className="mb-4 text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+        {title}
+      </p>
       <svg width="100%" viewBox={`0 0 ${w} ${h}`} className="min-h-[120px]">
         {slice.map((d, i) => {
           const barW = (d.value / max) * (w - 60);
           const y = 8 + i * (barH + gap);
           return (
             <g key={d.label}>
-              <text x="0" y={y + barH - 2} className="fill-zinc-600 text-[10px] dark:fill-zinc-400">
+              <text x="0" y={y + barH - 2} className="fill-zinc-500 text-[10px] dark:fill-zinc-400">
                 {d.label.length > 10 ? d.label.slice(0, 10) + "…" : d.label}
               </text>
               <rect
@@ -38,13 +40,13 @@ export function SimpleChart({
                 y={y}
                 width={barW}
                 height={barH}
-                rx="2"
-                className="fill-emerald-500 dark:fill-emerald-600"
+                rx="3"
+                className="fill-emerald-500 dark:fill-emerald-500"
               />
               <text
                 x={56 + barW}
                 y={y + barH - 2}
-                className="fill-zinc-500 text-[10px] dark:fill-zinc-400"
+                className="fill-zinc-500 text-[10px] font-medium dark:fill-zinc-400"
               >
                 {valueFormat(d.value)}
               </text>

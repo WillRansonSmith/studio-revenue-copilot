@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dir:*)",
+      "Bash(npx next build:*)",
+      "Bash(npm run build:*)",
+      "Bash(where:*)",
+      "Bash(cmd /c \"where node && where npm\")",
+      "Bash(cmd /c \"node --version && npm --version\")",
+      "Bash(powershell -Command:*)",
+      "Bash(PATH=\"/c/Program Files/nodejs:$PATH\")",
+      "Bash(node --version:*)",
+      "Bash(\"C:/Program Files/nodejs/node.exe\" -e \"const fs=require\\(''fs''\\); const lines=[''<svg xmlns=\"\"http://www.w3.org/2000/svg\"\" width=\"\"512\"\" height=\"\"512\"\" viewBox=\"\"0 0 512 512\"\">'',''  <rect width=\"\"512\"\" height=\"\"512\"\" rx=\"\"96\"\" fill=\"\"#059669\"\"/>'',''  <polyline'',''    points=\"\"80,256 160,256 210,100 270,400 320,180 370,256 432,256\"\"'',''    fill=\"\"none\"\"'',''    stroke=\"\"#ffffff\"\"'',''    stroke-width=\"\"36\"\"'',''    stroke-linecap=\"\"round\"\"'',''    stroke-linejoin=\"\"round\"\"'',''  />'',''</svg>'','''']; fs.writeFileSync\\(''C:\\\\\\\\Users\\\\\\\\willi\\\\\\\\Documents\\\\\\\\studio-revenue-copilot\\\\\\\\src\\\\\\\\app\\\\\\\\icon.svg'', lines.join\\(''\\\\n''\\), ''utf8''\\); console.log\\(''Done: icon.svg created''\\);\")",
+      "Bash(\"C:/Program Files/nodejs/node.exe\" -e \"const fs=require\\(''fs''\\); const lines=[''<svg xmlns=\"\"http://www.w3.org/2000/svg\"\" width=\"\"512\"\" height=\"\"512\"\" viewBox=\"\"0 0 512 512\"\">'',''  <rect width=\"\"512\"\" height=\"\"512\"\" rx=\"\"96\"\" fill=\"\"#059669\"\"/>'',''  <polyline'',''    points=\"\"80,256 160,256 210,100 270,400 320,180 370,256 432,256\"\"'',''    fill=\"\"none\"\"'',''    stroke=\"\"#ffffff\"\"'',''    stroke-width=\"\"36\"\"'',''    stroke-linecap=\"\"round\"\"'',''    stroke-linejoin=\"\"round\"\"'',''  />'',''</svg>'','''']; const p=''C:/Users/willi/Documents/studio-revenue-copilot/src/app/icon.svg''; fs.writeFileSync\\(p, lines.join\\(''\\\\n''\\), ''utf8''\\); console.log\\(''Written to: ''+p\\); console.log\\(''Exists: ''+fs.existsSync\\(p\\)\\);\")",
+      "Bash(\"C:/Program Files/nodejs/node.exe\" -e \"console.log\\(require\\(''fs''\\).readFileSync\\(''C:/Users/willi/Documents/studio-revenue-copilot/src/app/icon.svg'',''utf8''\\)\\)\")"
+    ]
+  }
+}

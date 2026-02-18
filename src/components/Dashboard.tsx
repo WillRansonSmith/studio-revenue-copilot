@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import type { ClassSession, ChangelogEntry } from "@/lib/data";
 import { KPI } from "./KPI";
 import { SessionsTable } from "./SessionsTable";
-import { SimpleChart } from "./SimpleChart";
+import { HorizontalBarChart } from "./HorizontalBarChart";
 import { Changelog } from "./Changelog";
 import { BarChart3, DollarSign, Users, TrendingUp } from "lucide-react";
 
@@ -40,8 +40,14 @@ export function Dashboard({
 
   if (loading || !data) {
     return (
-      <div className="flex min-h-[320px] items-center justify-center text-zinc-500">
-        Loading…
+      <div className="flex min-h-[320px] items-center justify-center">
+        <div className="flex items-center gap-3 text-zinc-400">
+          <svg className="h-5 w-5 animate-spin" viewBox="0 0 24 24" fill="none">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+          </svg>
+          <span className="text-sm font-medium">Loading dashboard&hellip;</span>
+        </div>
       </div>
     );
   }
@@ -74,20 +80,31 @@ export function Dashboard({
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
-        <h2 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">
-          Studio revenue
-        </h2>
+        <div>
+          <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">
+            Overview
+          </h2>
+          <p className="text-xs text-zinc-500 dark:text-zinc-400">
+            6-month performance snapshot
+          </p>
+        </div>
         <button
           type="button"
           onClick={onRegenerate}
           disabled={regenerating}
-          className="rounded-lg border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-700 shadow-sm hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700"
+          className="inline-flex items-center gap-2 rounded-lg border border-zinc-200 bg-white px-4 py-2 text-sm font-medium text-zinc-700 shadow-sm transition-colors hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700"
         >
+          {regenerating && (
+            <svg className="h-3.5 w-3.5 animate-spin" viewBox="0 0 24 24" fill="none">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+            </svg>
+          )}
           {regenerating ? "Regenerating…" : "Regenerate dummy data"}
         </button>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <KPI
           label="Total revenue"
           value={`$${totalRevenue.toLocaleString()}`}
@@ -97,7 +114,7 @@ export function Dashboard({
         <KPI
           label="Fill rate"
           value={`${fillRate}%`}
-          sub={`${totalBooked} / ${totalCapacity} booked`}
+          sub={`${totalBooked.toLocaleString()} / ${totalCapacity.toLocaleString()} booked`}
           icon={<BarChart3 className="h-5 w-5" />}
         />
         <KPI
@@ -108,29 +125,29 @@ export function Dashboard({
         />
         <KPI
           label="Sessions"
-          value={sessions.length}
-          sub="6 months"
+          value={sessions.length.toLocaleString()}
+          sub="6-month window"
           icon={<TrendingUp className="h-5 w-5" />}
         />
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-3">
-        <SimpleChart
+      <div className="grid gap-4 lg:grid-cols-3">
+        <HorizontalBarChart
           title="Revenue by time slot"
+          subtitle="6-month revenue"
           data={revenueBySlot}
-          valueFormat={(n) => `$${(n / 1000).toFixed(0)}k`}
         />
-        <SimpleChart
+        <HorizontalBarChart
           title="Revenue by class type"
+          subtitle="6-month revenue"
           data={revenueByType}
-          valueFormat={(n) => `$${(n / 1000).toFixed(0)}k`}
         />
         <Changelog entries={changelog} />
       </div>
 
       <div>
-        <h3 className="mb-2 text-sm font-semibold text-zinc-800 dark:text-zinc-200">
-          Recent sessions (sample)
+        <h3 className="mb-3 text-sm font-semibold text-zinc-800 dark:text-zinc-200">
+          Recent sessions
         </h3>
         <SessionsTable sessions={sessions} maxRows={30} />
       </div>

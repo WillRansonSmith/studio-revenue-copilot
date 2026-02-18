@@ -13,8 +13,12 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Studio Revenue Copilot",
-  description: "Dashboard and AI copilot for studio class revenue and fill rates",
+  title: {
+    default: "Studio Revenue Copilot",
+    template: "%s | Studio Revenue Copilot",
+  },
+  description:
+    "AI-powered dashboard for optimizing studio class revenue, fill rates, and scheduling.",
 };
 
 export default function RootLayout({
