@@ -148,9 +148,8 @@ export function regenerate(seed?: number): ClassSession[] {
   return currentSessions;
 }
 
-/** "What happened last 4 weeks" changelog computed from current data. */
-export function getChangelog(): ChangelogEntry[] {
-  const sessions = getSessions();
+/** "What happened last 4 weeks" changelog computed from any session list. */
+export function computeChangelog(sessions: ClassSession[]): ChangelogEntry[] {
   const now = new Date();
   const fourWeeksAgo = new Date(now);
   fourWeeksAgo.setDate(fourWeeksAgo.getDate() - 28);
@@ -194,4 +193,9 @@ export function getChangelog(): ChangelogEntry[] {
   }
 
   return entries;
+}
+
+/** @deprecated Use computeChangelog(sessions) instead. Kept for server-side API route compatibility. */
+export function getChangelog(): ChangelogEntry[] {
+  return computeChangelog(getSessions());
 }

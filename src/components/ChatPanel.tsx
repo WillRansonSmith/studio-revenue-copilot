@@ -1,7 +1,9 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
-import type { CopilotStructuredResponse } from "@/app/api/chat/route";
+import type { CopilotStructuredResponse, DatasetStats } from "@/app/api/chat/route";
+import type { ClassSession } from "@/lib/data";
+import { useDataset } from "@/lib/dataset-context";
 import { Send, Sparkles } from "lucide-react";
 
 const STARTER_QUESTIONS = [
@@ -20,7 +22,104 @@ interface Message {
   structured?: CopilotStructuredResponse;
 }
 
+function computeStats(sessions: ClassSession[]): DatasetStats {
+  if (sessions.length === 0) {
+    return {
+      totalSessions: 0,
+      dateRange: { start: "", end: "" },
+      revenue: { total: 0, avg: 0 },
+      fillRate: { overall: 0 },
+      attended: { total: 0, avg: 0 },
+      byTimeSlot: [],
+      byInstructor: [],
+      byClassType: [],
+      lowFillSegments: [],
+      highWaitlistSegments: [],
+    };
+  }
+
+  const dates = sessions.map((s) => s.date).sort();
+  const totalRevenue = sessions.reduce((a, s) => a + s.revenue, 0);
+  const totalCapacity = sessions.reduce((a, s) => a + s.capacity, 0);
+  const totalBooked = sessions.reduce((a, s) => a + s.booked, 0);
+  const totalAttended = sessions.reduce((a, s) => a + s.attended, 0);
+
+  // Group helper
+  function groupBy<K extends string>(
+    key: (s: ClassSession) => K,
+  ): Map<K, ClassSession[]> {
+    const m = new Map<K, ClassSession[]>();
+    for (const s of sessions) {
+      const k = key(s);
+      if (!m.has(k)) m.set(k, []);
+      m.get(k)!.push(s);
+    }
+    return m;
+  }
+
+  function slotStats(group: ClassSession[]) {
+    const rev = group.reduce((a, s) => a + s.revenue, 0);
+    const cap = group.reduce((a, s) => a + s.capacity, 0);
+    const bkd = group.reduce((a, s) => a + s.booked, 0);
+    const totalPrice = group.reduce((a, s) => a + s.actualPrice, 0);
+    return {
+      sessions: group.length,
+      revenue: rev,
+      fillRate: cap ? (bkd / cap) * 100 : 0,
+      avgPrice: group.length ? totalPrice / group.length : 0,
+    };
+  }
+
+  const bySlotMap = groupBy((s) => s.timeSlot as string);
+  const byInstructorMap = groupBy((s) => s.instructorName);
+  const byTypeMap = groupBy((s) => s.classType as string);
+
+  const byTimeSlot = [...bySlotMap.entries()]
+    .map(([slot, g]) => ({ slot, ...slotStats(g) }))
+    .sort((a, b) => b.revenue - a.revenue);
+
+  const byInstructor = [...byInstructorMap.entries()]
+    .map(([name, g]) => {
+      const rev = g.reduce((a, s) => a + s.revenue, 0);
+      const cap = g.reduce((a, s) => a + s.capacity, 0);
+      const bkd = g.reduce((a, s) => a + s.booked, 0);
+      return { name, sessions: g.length, revenue: rev, fillRate: cap ? (bkd / cap) * 100 : 0 };
+    })
+    .sort((a, b) => b.revenue - a.revenue);
+
+  const byClassType = [...byTypeMap.entries()]
+    .map(([type, g]) => ({ type, ...slotStats(g) }))
+    .sort((a, b) => b.revenue - a.revenue);
+
+  // Low fill segments: time slots where fill < 60%
+  const lowFillSegments = byTimeSlot
+    .filter((s) => s.fillRate < 60)
+    .map((s) => ({ label: s.slot, fillRate: s.fillRate }));
+
+  // High waitlist: time slots where >30% of sessions had waitlist
+  const highWaitlistSegments = [...bySlotMap.entries()]
+    .map(([slot, g]) => ({
+      label: slot,
+      waitlistPct: g.length ? (g.filter((s) => s.revenue > 0 && s.booked >= s.capacity).length / g.length) * 100 : 0,
+    }))
+    .filter((s) => s.waitlistPct > 30);
+
+  return {
+    totalSessions: sessions.length,
+    dateRange: { start: dates[0], end: dates[dates.length - 1] },
+    revenue: { total: totalRevenue, avg: totalRevenue / sessions.length },
+    fillRate: { overall: totalCapacity ? (totalBooked / totalCapacity) * 100 : 0 },
+    attended: { total: totalAttended, avg: totalAttended / sessions.length },
+    byTimeSlot,
+    byInstructor,
+    byClassType,
+    lowFillSegments,
+    highWaitlistSegments,
+  };
+}
+
 export function ChatPanel() {
+  const { sessions } = useDataset();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -48,10 +147,11 @@ export function ChatPanel() {
     wasNearBottomRef.current = true;
     setLoading(true);
     try {
+      const stats = computeStats(sessions);
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: trimmed }),
+        body: JSON.stringify({ message: trimmed, stats }),
       });
       const data = await res.json();
       wasNearBottomRef.current = checkNearBottom();
@@ -60,7 +160,7 @@ export function ChatPanel() {
           m.concat({
             role: "assistant",
             content: `Error: ${data.error ?? res.statusText}`,
-          })
+          }),
         );
         return;
       }
@@ -69,7 +169,7 @@ export function ChatPanel() {
           role: "assistant",
           content: data.summary ?? JSON.stringify(data),
           structured: data as CopilotStructuredResponse,
-        })
+        }),
       );
     } catch (e) {
       wasNearBottomRef.current = checkNearBottom();
@@ -77,7 +177,7 @@ export function ChatPanel() {
         m.concat({
           role: "assistant",
           content: `Request failed: ${e instanceof Error ? e.message : "Unknown error"}`,
-        })
+        }),
       );
     } finally {
       setLoading(false);
@@ -142,9 +242,7 @@ export function ChatPanel() {
               >
                 {msg.content}
               </div>
-              {msg.structured && (
-                <StructuredBlock data={msg.structured} />
-              )}
+              {msg.structured && <StructuredBlock data={msg.structured} />}
             </div>
           </div>
         ))}
@@ -213,7 +311,10 @@ function StructuredBlock({ data }: { data: CopilotStructuredResponse }) {
     <div className="space-y-1.5 rounded-xl border border-zinc-200/80 bg-white p-3 text-sm dark:border-zinc-700/80 dark:bg-zinc-800/50">
       {items.map((item) => (
         <div key={item.label} className="flex gap-2">
-          <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500" style={{ minWidth: "5rem", paddingTop: "2px" }}>
+          <span
+            className="shrink-0 text-[10px] font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500"
+            style={{ minWidth: "5rem", paddingTop: "2px" }}
+          >
             {item.label}
           </span>
           <span className="text-xs leading-relaxed text-zinc-600 dark:text-zinc-300">{item.value}</span>

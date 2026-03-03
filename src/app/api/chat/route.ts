@@ -20,6 +20,37 @@ export interface CopilotStructuredResponse {
   memberFacingMessage: string;
 }
 
+/** Aggregated stats sent from the client so the AI is grounded in the active dataset. */
+export interface DatasetStats {
+  totalSessions: number;
+  dateRange: { start: string; end: string };
+  revenue: { total: number; avg: number };
+  fillRate: { overall: number };
+  attended: { total: number; avg: number };
+  byTimeSlot: Array<{
+    slot: string;
+    sessions: number;
+    revenue: number;
+    fillRate: number;
+    avgPrice: number;
+  }>;
+  byInstructor: Array<{
+    name: string;
+    sessions: number;
+    revenue: number;
+    fillRate: number;
+  }>;
+  byClassType: Array<{
+    type: string;
+    sessions: number;
+    revenue: number;
+    fillRate: number;
+    avgPrice: number;
+  }>;
+  lowFillSegments: Array<{ label: string; fillRate: number }>;
+  highWaitlistSegments: Array<{ label: string; waitlistPct: number }>;
+}
+
 const STRUCTURE_PROMPT = `You are a studio revenue advisor. Answer using ONLY this structure (use the exact headings and plain text, no markdown):
 
 Summary:
@@ -40,14 +71,57 @@ Risks & fairness notes:
 Suggested member-facing message:
 [2-3 sentences]`;
 
-function mockResponse(query: string, contextDocs: string[]): CopilotStructuredResponse {
+function buildStatsContext(stats: DatasetStats): string {
+  const lines: string[] = [
+    "Dataset summary (use this as evidence for your recommendations):",
+    `Sessions: ${stats.totalSessions} | Date range: ${stats.dateRange.start} to ${stats.dateRange.end}`,
+    `Revenue: $${stats.revenue.total.toLocaleString()} total, $${stats.revenue.avg.toFixed(0)} avg per session`,
+    `Fill rate: ${stats.fillRate.overall.toFixed(1)}%`,
+    `Attendance: ${stats.attended.total.toLocaleString()} total, ${stats.attended.avg.toFixed(1)} avg per session`,
+    "",
+    "By time slot:",
+    ...stats.byTimeSlot.map(
+      (s) =>
+        `  ${s.slot}: ${s.sessions} sessions, fill ${s.fillRate.toFixed(1)}%, revenue $${s.revenue.toLocaleString()}, avg price $${s.avgPrice.toFixed(0)}`,
+    ),
+    "",
+    "By instructor:",
+    ...stats.byInstructor.map(
+      (s) =>
+        `  ${s.name}: ${s.sessions} sessions, fill ${s.fillRate.toFixed(1)}%, revenue $${s.revenue.toLocaleString()}`,
+    ),
+    "",
+    "By class type:",
+    ...stats.byClassType.map(
+      (s) =>
+        `  ${s.type}: ${s.sessions} sessions, fill ${s.fillRate.toFixed(1)}%, revenue $${s.revenue.toLocaleString()}, avg price $${s.avgPrice.toFixed(0)}`,
+    ),
+  ];
+
+  if (stats.lowFillSegments.length > 0) {
+    lines.push("", "Low fill segments (<60%):");
+    lines.push(...stats.lowFillSegments.map((s) => `  ${s.label}: ${s.fillRate.toFixed(1)}%`));
+  }
+
+  if (stats.highWaitlistSegments.length > 0) {
+    lines.push("", "High waitlist segments:");
+    lines.push(
+      ...stats.highWaitlistSegments.map(
+        (s) => `  ${s.label}: ${s.waitlistPct.toFixed(0)}% of sessions had waitlist`,
+      ),
+    );
+  }
+
+  return lines.join("\n");
+}
+
+function mockResponse(query: string, contextBlock: string): CopilotStructuredResponse {
   const hasPrice = /price|pricing|discount|cost/i.test(query);
   const hasSchedule = /schedule|slot|time|morning|evening|weekend/i.test(query);
-  const hasFill = /fill|occupancy|demand|booked/i.test(query);
-  const docSummary = contextDocs.slice(0, 3).join(" | ").slice(0, 200);
+  const docSummary = contextBlock.slice(0, 300);
 
   return {
-    summary: `Based on ${contextDocs.length} relevant sessions: ${docSummary}…`,
+    summary: `Based on your dataset: ${docSummary}…`,
     recommendedAction: [
       hasPrice && "Consider a 10–15% trial discount on lunch/afternoon slots.",
       hasSchedule && "Shift 1–2 peak instructors to after-work slots.",
@@ -56,11 +130,12 @@ function mockResponse(query: string, contextDocs: string[]): CopilotStructuredRe
       .filter(Boolean)
       .join(" ") || "Review low-fill slots and consider a limited-time promotion.",
     expectedImpact: "Fill rate +5–10% on targeted slots; revenue +3–7% over 4 weeks.",
-    confidence: contextDocs.length >= 4 ? "Medium" : "Low",
-    confidenceReason: contextDocs.length >= 4 ? "Enough session history to spot patterns." : "Limited matching data; recommend more history before big changes.",
-    risksAndFairness: "Members may notice price differences by slot; communicate as 'peak vs off-peak' to avoid perception of unfairness. Rotate star instructor slots to support morale.",
+    confidence: "Medium",
+    confidenceReason: "Sufficient session history to spot patterns.",
+    risksAndFairness:
+      "Members may notice price differences by slot; communicate as 'peak vs off-peak' to avoid perception of unfairness. Rotate star instructor slots to support morale.",
     memberFacingMessage:
-      "We’re piloting off-peak pricing so you can try more classes at a lower price. Your favorite classes and instructors are unchanged; we’ve added more value at quieter times.",
+      "We're piloting off-peak pricing so you can try more classes at a lower price. Your favorite classes and instructors are unchanged; we've added more value at quieter times.",
   };
 }
 
@@ -87,13 +162,19 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "message is required" }, { status: 400 });
     }
 
-    const sessions = getSessions();
-    const corpus = buildCorpus(sessions);
-    const topDocs = retrieve(message, corpus);
-    const contextDocs = topDocs.map((d) => d.text);
-    const contextBlock = contextDocs.length
-      ? "Relevant session data (use for evidence):\n" + contextDocs.join("\n\n")
-      : "No matching session data.";
+    // Use client-supplied stats if provided; otherwise fall back to server-side session RAG
+    let contextBlock: string;
+    if (body?.stats) {
+      contextBlock = buildStatsContext(body.stats as DatasetStats);
+    } else {
+      const sessions = getSessions();
+      const corpus = buildCorpus(sessions);
+      const topDocs = retrieve(message, corpus);
+      const contextDocs = topDocs.map((d) => d.text);
+      contextBlock = contextDocs.length
+        ? "Relevant session data (use for evidence):\n" + contextDocs.join("\n\n")
+        : "No matching session data.";
+    }
 
     const hasKey = Boolean(process.env.ANTHROPIC_API_KEY);
 
@@ -110,18 +191,17 @@ export async function POST(req: NextRequest) {
         response.content?.find((c) => c.type === "text")?.type === "text"
           ? (response.content?.find((c) => c.type === "text") as { type: "text"; text: string }).text
           : "";
-      // Parse structured blocks from model output into our shape
       const parsed = parseStructuredOutput(text);
       return NextResponse.json(parsed);
     }
 
-    const mock = mockResponse(message, contextDocs);
+    const mock = mockResponse(message, contextBlock);
     return NextResponse.json(mock);
   } catch (e) {
     console.error("chat error", e);
     return NextResponse.json(
       { error: e instanceof Error ? e.message : "Chat failed" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
