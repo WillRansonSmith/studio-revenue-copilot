@@ -7,6 +7,28 @@ interface SessionsTableProps {
   maxRows?: number;
 }
 
+function getDemandSignal(fillNum: number): { label: string; className: string } {
+  if (fillNum >= 90) {
+    return {
+      label: "High Demand",
+      className:
+        "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-400 dark:ring-emerald-800/50",
+    };
+  }
+  if (fillNum >= 75) {
+    return {
+      label: "Healthy Demand",
+      className:
+        "bg-zinc-100 text-zinc-600 ring-1 ring-zinc-200 dark:bg-zinc-800/50 dark:text-zinc-300 dark:ring-zinc-700/50",
+    };
+  }
+  return {
+    label: "Underutilized",
+    className:
+      "bg-amber-50 text-amber-700 ring-1 ring-amber-200 dark:bg-amber-950/50 dark:text-amber-400 dark:ring-amber-800/50",
+  };
+}
+
 export function SessionsTable({ sessions, maxRows = 50 }: SessionsTableProps) {
   const rows = sessions.slice(0, maxRows);
   return (
@@ -21,12 +43,14 @@ export function SessionsTable({ sessions, maxRows = 50 }: SessionsTableProps) {
             <th className="whitespace-nowrap px-4 py-3 text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">Price</th>
             <th className="whitespace-nowrap px-4 py-3 text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">Fill</th>
             <th className="whitespace-nowrap px-4 py-3 text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">Revenue</th>
+            <th className="whitespace-nowrap px-4 py-3 text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">Demand Signal</th>
           </tr>
         </thead>
         <tbody>
           {rows.map((s, idx) => {
             const fillPct = s.capacity ? ((s.booked / s.capacity) * 100).toFixed(0) : "0";
             const fillNum = Number(fillPct);
+            const signal = getDemandSignal(fillNum);
             return (
               <tr
                 key={s.id}
@@ -60,6 +84,11 @@ export function SessionsTable({ sessions, maxRows = 50 }: SessionsTableProps) {
                 </td>
                 <td className="whitespace-nowrap px-4 py-2.5 tabular-nums font-medium text-zinc-700 dark:text-zinc-300">
                   ${s.revenue.toLocaleString()}
+                </td>
+                <td className="whitespace-nowrap px-4 py-2.5">
+                  <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${signal.className}`}>
+                    {signal.label}
+                  </span>
                 </td>
               </tr>
             );
